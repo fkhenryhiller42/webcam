@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>鏡頭控制台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eae5de;
+    --surface: #ffffff;
+    --surface-2: #f4f0e9;
+    --border: #d8d0c4;
+    --text: #27221e;
+    --text-dim: #837968;
+    --accent: #a8672c;
+    --accent-ink: #ffffff;
+    --live: #c23b2f;
+    --live-bg: rgba(194,59,47,0.1);
+    --track: #d8d0c4;
+    --focus-ring: #a8672c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #1a1620;
+      --surface: #241f2b;
+      --surface-2: #2c2634;
+      --border: #3c3444;
+      --text: #f1ece6;
+      --text-dim: #9b93a3;
+      --accent: #d99a4e;
+      --accent-ink: #1a1620;
+      --live: #e2574c;
+      --live-bg: rgba(226,87,76,0.16);
+      --track: #3c3444;
+      --focus-ring: #d99a4e;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #1a1620;
+    --surface: #241f2b;
+    --surface-2: #2c2634;
+    --border: #3c3444;
+    --text: #f1ece6;
+    --text-dim: #9b93a3;
+    --accent: #d99a4e;
+    --accent-ink: #1a1620;
+    --live: #e2574c;
+    --live-bg: rgba(226,87,76,0.16);
+    --track: #3c3444;
+    --focus-ring: #d99a4e;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', system-ui, -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  }
+  body {
+    padding: calc(28px + env(safe-area-inset-top, 0px)) 20px calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 22px; }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.92rem;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .viewfinder {
+    position: relative;
+    background: #0d0b10;
+    border-radius: 14px;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .viewfinder video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform-origin: center center;
+    transition: transform 0.15s ease-out;
+  }
+  .vf-corner {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(255,255,255,0.55);
+    pointer-events: none;
+  }
+  .vf-corner.tl { top: 10px; left: 10px; border-right: none; border-bottom: none; }
+  .vf-corner.tr { top: 10px; right: 10px; border-left: none; border-bottom: none; }
+  .vf-corner.bl { bottom: 10px; left: 10px; border-right: none; border-top: none; }
+  .vf-corner.br { bottom: 10px; right: 10px; border-left: none; border-top: none; }
+
+  .vf-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    color: rgba(255,255,255,0.45);
+    text-align: center;
+    padding: 24px;
+  }
+  .vf-placeholder svg { opacity: 0.5; }
+  .vf-placeholder span { font-size: 0.88rem; max-width: 280px; line-height: 1.5; }
+
+  .vf-status {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(13,11,16,0.55);
+    backdrop-filter: blur(4px);
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    color: #f1ece6;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .dot.on {
+    background: var(--live);
+    box-shadow: 0 0 0 0 var(--live);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(226,87,76,0.55); }
+    70% { box-shadow: 0 0 0 7px rgba(226,87,76,0); }
+    100% { box-shadow: 0 0 0 0 rgba(226,87,76,0); }
+  }
+
+  .vf-readout {
+    position: absolute;
+    bottom: 10px;
+    right: 12px;
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.75);
+    background: rgba(13,11,16,0.45);
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  button.live-btn {
+    appearance: none;
+    border: none;
+    border-radius: 10px;
+    padding: 13px 18px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-ink);
+    transition: filter 0.15s ease, transform 0.08s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  button.live-btn:hover { filter: brightness(1.06); }
+  button.live-btn:active { transform: scale(0.98); }
+  button.live-btn.active {
+    background: var(--live-bg);
+    color: var(--live);
+    border: 1px solid var(--live);
+  }
+  button.live-btn:disabled { opacity: 0.55; cursor: default; }
+
+  .field label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.86rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .field label .val {
+    font-weight: 500;
+    color: var(--accent);
+  }
+  .field .hint {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--track);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 3px solid var(--focus-ring);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 3px solid var(--focus-ring);
+    cursor: pointer;
+  }
+  input[type="range"]:disabled { opacity: 0.4; }
+
+  .ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+  }
+
+  .divider { height: 1px; background: var(--border); }
+
+  .meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+  .meta div { font-size: 0.78rem; color: var(--text-dim); }
+  .meta div b {
+    display: block;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.86rem;
+    margin-top: 2px;
+  }
+
+  .msg {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    padding: 10px 12px;
+    border-radius: 8px;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.error { background: var(--live-bg); color: var(--live); }
+  .msg.info { background: var(--surface-2); color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>鏡頭控制台</h1>
+    <p>調整焦距遠近，並即時檢視攝影機目前拍攝畫面</p>
+  </header>
+
+  <div class="grid">
+    <div class="viewfinder" id="viewfinder">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="vf-corner tl"></div>
+      <div class="vf-corner tr"></div>
+      <div class="vf-corner bl"></div>
+      <div class="vf-corner br"></div>
+      <div class="vf-placeholder" id="placeholder">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <span>按下方按鈕開始監看，將會持續顯示攝影機即時畫面</span>
+      </div>
+      <div class="vf-status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">未啟動</span>
+      </div>
+      <div class="vf-readout mono" id="readout" style="display:none;"></div>
+    </div>
+
+    <div class="panel">
+      <button class="live-btn" id="toggleBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+        開始即時監看
+      </button>
+
+      <div class="msg error" id="errorMsg"></div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>焦距遠近 <span class="val mono" id="sliderVal">—</span></label>
+        <input type="range" id="slider" min="0" max="100" value="0" step="1" disabled>
+        <div class="ticks"><span>近</span><span>遠</span></div>
+        <div class="hint" id="modeHint">啟動鏡頭後即可調整</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="meta">
+        <div>解析度<b class="mono" id="metaRes">—</b></div>
+        <div>幀率<b class="mono" id="metaFps">—</b></div>
+        <div>控制模式<b id="metaMode">—</b></div>
+        <div>裝置<b id="metaDevice" style="font-weight:500; font-size:0.78rem;">—</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let stream = null;
+let track = null;
+let mode = null; // 'zoom' | 'focusDistance' | 'digital'
+const video = document.getElementById('video');
+const placeholder = document.getElementById('placeholder');
+const toggleBtn = document.getElementById('toggleBtn');
+const slider = document.getElementById('slider');
+const sliderVal = document.getElementById('sliderVal');
+const modeHint = document.getElementById('modeHint');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const readout = document.getElementById('readout');
+const errorMsg = document.getElementById('errorMsg');
+const metaRes = document.getElementById('metaRes');
+const metaFps = document.getElementById('metaFps');
+const metaMode = document.getElementById('metaMode');
+const metaDevice = document.getElementById('metaDevice');
+
+function showError(text) {
+  errorMsg.textContent = text;
+  errorMsg.classList.add('show');
+}
+function clearError() {
+  errorMsg.classList.remove('show');
+}
+
+async function startCamera() {
+  clearError();
+  toggleBtn.disabled = true;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+  } catch (err) {
+    toggleBtn.disabled = false;
+    if (err.name === 'NotAllowedError') {
+      showError('無法取得攝影機授權，請在瀏覽器網址列允許相機存取權限後再試一次。');
+    } else if (err.name === 'NotFoundError') {
+      showError('找不到可用的攝影機裝置，請確認裝置已連接。');
+    } else {
+      showError('無法啟動攝影機（' + err.name + '）。若此頁面在內嵌視窗中開啟，請嘗試在獨立分頁開啟後再試。');
+    }
+    return;
+  }
+
+  video.srcObject = stream;
+  track = stream.getVideoTracks()[0];
+  placeholder.style.display = 'none';
+  toggleBtn.disabled = false;
+  toggleBtn.classList.add('active');
+  toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg> 停止監看';
+  statusDot.classList.add('on');
+  statusText.textContent = '即時監看中';
+  metaDevice.textContent = track.label || '預設攝影機';
+  readout.style.display = 'block';
+
+  setupControl();
+  updateMeta();
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+  }
+  stream = null;
+  track = null;
+  video.srcObject = null;
+  video.style.transform = 'scale(1)';
+  placeholder.style.display = 'flex';
+  toggleBtn.classList.remove('active');
+  toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg> 開始即時監看';
+  statusDot.classList.remove('on');
+  statusText.textContent = '未啟動';
+  readout.style.display = 'none';
+  slider.disabled = true;
+  sliderVal.textContent = '—';
+  metaRes.textContent = '—';
+  metaFps.textContent = '—';
+  metaMode.textContent = '—';
+  metaDevice.textContent = '—';
+  modeHint.textContent = '啟動鏡頭後即可調整';
+}
+
+function setupControl() {
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  const settings = track.getSettings ? track.getSettings() : {};
+
+  if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+    mode = 'zoom';
+    slider.min = caps.zoom.min;
+    slider.max = caps.zoom.max;
+    slider.step = caps.zoom.step || (caps.zoom.max - caps.zoom.min) / 100;
+    slider.value = settings.zoom || caps.zoom.min;
+    metaMode.textContent = '光學變焦';
+    modeHint.textContent = '此攝影機支援硬體變焦，拖曳可直接控制鏡頭拉近 / 拉遠。';
+  } else if (caps.focusDistance && caps.focusDistance.max > caps.focusDistance.min) {
+    mode = 'focusDistance';
+    slider.min = caps.focusDistance.min;
+    slider.max = caps.focusDistance.max;
+    slider.step = caps.focusDistance.step || (caps.focusDistance.max - caps.focusDistance.min) / 100;
+    slider.value = settings.focusDistance || caps.focusDistance.min;
+    track.applyConstraints({ advanced: [{ focusMode: 'manual' }] }).catch(() => {});
+    metaMode.textContent = '手動對焦';
+    modeHint.textContent = '此攝影機支援手動對焦距離調整，拖曳可切換近 / 遠對焦點。';
+  } else {
+    mode = 'digital';
+    slider.min = 1;
+    slider.max = 3;
+    slider.step = 0.02;
+    slider.value = 1;
+    metaMode.textContent = '數位變焦（模擬）';
+    modeHint.textContent = '此攝影機硬體不支援光學變焦或手動對焦，改以數位放大模擬成像遠近，畫質會隨放大倍率降低。';
+  }
+  slider.disabled = false;
+  updateSliderLabel();
+}
+
+function updateSliderLabel() {
+  const v = parseFloat(slider.value);
+  if (mode === 'zoom') {
+    sliderVal.textContent = v.toFixed(1) + 'x';
+  } else if (mode === 'focusDistance') {
+    sliderVal.textContent = v.toFixed(2);
+  } else {
+    sliderVal.textContent = v.toFixed(2) + 'x';
+  }
+}
+
+slider.addEventListener('input', () => {
+  updateSliderLabel();
+  const v = parseFloat(slider.value);
+  if (!track) return;
+  if (mode === 'zoom') {
+    track.applyConstraints({ advanced: [{ zoom: v }] }).catch(() => {});
+  } else if (mode === 'focusDistance') {
+    track.applyConstraints({ advanced: [{ focusDistance: v }] }).catch(() => {});
+  } else {
+    video.style.transform = 'scale(' + v + ')';
+  }
+});
+
+function updateMeta() {
+  if (!track) return;
+  const s = track.getSettings ? track.getSettings() : {};
+  if (s.width && s.height) metaRes.textContent = s.width + ' × ' + s.height;
+  if (s.frameRate) metaFps.textContent = Math.round(s.frameRate) + ' fps';
+  readout.textContent = (s.width && s.height ? s.width + '×' + s.height : '') +
+    (s.frameRate ? '  ' + Math.round(s.frameRate) + 'fps' : '');
+}
+
+toggleBtn.addEventListener('click', () => {
+  if (stream) stopCamera(); else startCamera();
+});
+</script>
+</body>
+</html>
